@@ -77,6 +77,7 @@ describe('UI state context', () => {
 
     it('child component inherits parent context', () => {
       const c = renderAndFind(<UIParent><UIChild /></UIParent>, Child);
+      console.log('here', c.props, uiState)
       assert(shallowEqual(c.props.ui, uiState), 'child inherits parent UI state context');
     });
 

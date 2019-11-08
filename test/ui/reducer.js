@@ -21,7 +21,7 @@ describe('with a custom reducer', () => {
   // UI variables
   let parentReducer = (state, action) => {
     if (action.type === 'CUSTOM') {
-      return state.set('name', 'parentOverride');
+      state = Object.assign({}, state, { 'name': 'parentOverride' });
     }
     return state;
   };
@@ -36,14 +36,14 @@ describe('with a custom reducer', () => {
   it('adds a custom reducer on mount and removes at unmount', () => {
     const c = renderAndFind(<UIParent />, Parent);
 
-    let reducers = store.getState().ui.get('__reducers');
-    assert.equal(reducers.size, 1);
-    assert.equal(reducers.get('parent').func, parentReducer);
+    let reducers = store.getState().ui['__reducers'];
+    assert.equal(Object.keys(reducers).length, 1);
+    assert.equal(reducers['parent'].func, parentReducer);
 
     // Unmount and this should be gone
     ReactDOM.unmountComponentAtNode(ReactDOM.findDOMNode(c).parentNode);
-    reducers = store.getState().ui.get('__reducers');
-    assert.equal(reducers.size, 0);
+    reducers = store.getState().ui['__reducers'];
+    assert.equal(Object.keys(reducers).length, 0);
   });
 
   it('updates props as expected', () => {
@@ -75,7 +75,9 @@ describe('with a custom reducer', () => {
     let childReducer = (state = {}, action) => {
       reducerState = state;
       if (action.type === 'CUSTOM') {
-        return state.set('foo', 'childOverride');
+        state = Object.assign({}, state, {
+          foo: 'childOverride',
+        })
       }
       return state;
     };
@@ -96,7 +98,7 @@ describe('with a custom reducer', () => {
       store.dispatch({ type: 'CUSTOM' });
       // The reducerState should equal the default reducer state for our child
       // component
-      assert.isTrue(is(reducerState, new Map({ foo: 'bar' })));
+      assert.deepEqual(reducerState, { foo: 'bar' });
       assert.equal(parent.props.ui.name, 'parentOverride');
       assert.equal(child.props.ui.foo, 'childOverride');
 
