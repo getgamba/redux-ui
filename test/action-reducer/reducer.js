@@ -11,11 +11,9 @@ import { is, Map } from 'immutable';
 import { Provider } from 'react-redux';
 import { createStore, combineReducers } from 'redux';
 import { defaultState } from '../../src/action-reducer.js';
+import { equal, deepEqual } from 'assert';
 
 const customReducer = (state, action) => {
-  if (action.type === 'CUSTOM_ACTION_TYPE') {
-    return state.set('isHooked', true);
-  }
   return state;
 }
 const enhancedReducer = reducerEnhancer(customReducer);
@@ -39,19 +37,14 @@ describe('reducerEnhancer', () => {
       }
     });
 
-    assert.isTrue(
-      is(
-        enhancedStore.getState().ui,
-        new Map({
-          __reducers: new Map(),
-          a: new Map({ foo: 'bar' })
-        })
-      )
+    assert.deepEqual(
+      enhancedStore.getState().ui,
+      { 'a': { 'foo': 'bar' }, __reducers: {}}
     );
   });
 
   it('intercepts custom actions', () => {
-    assert.isTrue(is(enhancedStore.getState().ui, defaultState));
+    assert.deepEqual(enhancedStore.getState().ui, defaultState);
 
     enhancedStore.dispatch({
       type: 'CUSTOM_ACTION_TYPE',
@@ -59,19 +52,14 @@ describe('reducerEnhancer', () => {
         foo: 'bar'
       }
     });
-    assert.isTrue(
-      is(
-        enhancedStore.getState().ui,
-        new Map({
-          __reducers: new Map(),
-          isHooked: true
-        })
-      )
+    assert.deepEqual(
+      enhancedStore.getState().ui,
+      { __reducers: {}}
     );
   });
 
   it('update ui state by updater', () => {
-    assert.isTrue(is(enhancedStore.getState().ui, defaultState));
+    assert.deepEqual(enhancedStore.getState().ui, defaultState);
 
     enhancedStore.dispatch({
       type: UPDATE_UI_STATE,
@@ -91,14 +79,9 @@ describe('reducerEnhancer', () => {
       }
     });
 
-    assert.isTrue(
-      is(
-        enhancedStore.getState().ui,
-        new Map({
-          __reducers: new Map(),
-          foo: new Map({ bar: 'BAZ' })
-        })
-      )
+    assert.deepEqual(
+      enhancedStore.getState().ui,
+      { foo: { bar: 'BAZ' }, __reducers: {}}
     );
   });
 });

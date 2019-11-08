@@ -16,16 +16,9 @@ export const SET_DEFAULT_UI_STATE = '@@redux-ui/SET_DEFAULT_UI_STATE';
 const MOUNT_UI_STATE = '@@redux-ui/MOUNT_UI_STATE';
 const UNMOUNT_UI_STATE = '@@redux-ui/UNMOUNT_UI_STATE';
 
-export const defaultState = new Map({
-  __reducers: new Map({
-    // This contains a map of component paths (joined by '.') to an object
-    // containing the fully qualified path and the reducer function:
-    // 'parent.child': {
-    //   path: ['parent', 'child'],
-    //   func: (state, action) => { ... }
-    // }
-  })
-});
+export const defaultState = {
+  __reducers: {}
+}
 
 export default function reducer(state = defaultState, action) {
   let key = action.payload && (action.payload.key || []);
@@ -34,99 +27,89 @@ export default function reducer(state = defaultState, action) {
     key = [key];
   }
 
+  let keypath = key.join('.')
   switch (action.type) {
     case UPDATE_UI_STATE:
       const { name, value } = action.payload;
       if (typeof value === 'function') {
-        state = state.updateIn(key.concat(name), value);
+        state = Object.assign({}, state, {
+          [keypath]: Object.assign({}, state[keypath], {
+            [name]: value(state[keypath][name])
+          })
+        });
       } else {
-        state = state.setIn(key.concat(name), value);
+        state = Object.assign({}, state, {
+          [keypath]: Object.assign({}, state[keypath], {
+            [name]: value
+          })
+        });
       }
       break;
 
     case MASS_UPDATE_UI_STATE:
       const { uiVars, transforms } = action.payload;
-      state = state.withMutations( s => {
-        Object.keys(transforms).forEach(k => {
-          const path = uiVars[k];
-          invariant(
-            path,
-            `Couldn't find variable ${k} within your component's UI state ` +
-            `context. Define ${k} before using it in the @ui decorator`
-          );
+      Object.keys(transforms).forEach(k => {
+        const path = uiVars[k];
+        invariant(
+          path,
+          `Couldn't find variable ${k} within your component's UI state ` +
+          `context. Define ${k} before using it in the @ui decorator`
+        );
 
-          s.setIn(path.concat(k), transforms[k]);
+        const _keypath = path.join('.')
+        state = Object.assign({}, state, {
+          [_keypath]: Object.assign({}, state[_keypath], {
+            [k]: transforms[k]
+          })
         });
       });
       break;
 
     case SET_DEFAULT_UI_STATE:
       // Replace all UI under a key with the given values
-      state = state.setIn(key, new Map(action.payload.value));
+      state = Object.assign({}, state, {
+        [keypath]: Object.assign({}, state[keypath], action.payload.value)
+      });
       break;
 
     case MOUNT_UI_STATE:
       const { defaults, customReducer } = action.payload;
-      state = state.withMutations( s => {
-        // Set the defaults for the component
-        s.setIn(key, new Map(defaults));
-
-        // If this component has a custom reducer add it to the list.
-        // We store the reducer func and UI path for the current component
-        // inside the __reducers map.
-        if (customReducer) {
-          let path = key.join('.');
-          s.setIn(['__reducers', path], {
-            path: key,
+      state = Object.assign({}, state, {
+        [keypath]: defaults
+      })
+      if (customReducer) {
+        state['__reducers'] = Object.assign({}, {
+          [keypath]: {
+            path: key, 
             func: customReducer
-          });
-        }
-
-        return s;
-      });
+          }
+        })
+      }
       break;
 
     case UNMOUNT_UI_STATE:
       // We have to use deleteIn as react unmounts root components first;
       // this means that using setIn in child contexts will fail as the root
       // context will be stored as undefined in our state
-      state= state.withMutations(s => {
-        s.deleteIn(key);
-        // Remove any custom reducers
-        s.deleteIn(['__reducers', key.join('.')]);
-      });
+      state = Object.assign({}, state);
+      delete state[keypath];
+      delete state['__reducers'][keypath];
       break;
   }
 
-  const customReducers = state.get('__reducers');
-  if (customReducers.size > 0) {
-    state = state.withMutations(mut => {
-      customReducers.forEach(r => {
-        // This calls each custom reducer with the UI state for each custom
-        // reducer with the component's UI state tree passed into it.
-        //
-        // NOTE: Each component's reducer gets its own UI state: not the entire
-        // UI reducer's state. Whatever is returned from this reducer is set
-        // within the **components** UI scope.
-        //
-        // This is because it's the only way to update UI state for components
-        // without keys - you need to know the path in advance to update state
-        // from a reducer.  If you have list of components with no UI keys in
-        // the component heirarchy, any children will not be able to use custom
-        // reducers as the path is random.
-        //
-        // TODO: Potentially add the possibility for a global UI state reducer?
-        //       Though why wouldn't you just add a custom reducer to the
-        //       top-level component?
-        const { path, func } = r;
-        const newState = func(mut.getIn(path), action);
-        if (newState === undefined) {
-          throw new Error(`Your custom UI reducer at path ${path.join('.')} must return some state`);
-        }
-        mut.setIn(path, newState);
-      });
-      return mut;
-    });
+  const customReducers = state['__reducers'];
+  if (Object.keys(customReducers).length > 0) {
+    const keys = Object.keys(customReducers);
+    keys.forEach((key)=> {
+      const { path, func } = customReducers[key];
+      const newState = func(state[path], action);
+      if (newState === undefined) {
+        throw new Error(`Your custom UI reducer at path ${path.join('.')} must return some state`);
+      }
+      state = Object.assign({}, state, {
+        [path]: newState
+      })
+    })
   }
 
   return state;
